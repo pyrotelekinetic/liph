@@ -3,25 +3,24 @@
 module Eval where
 
 import Control.Monad.Except
-import Parser (Sexp (..), Table, State, Error)
+import Control.Monad.State
+import Parser (Sexp (..), Table, MyState, Error)
 
 
-raise :: String -> Either Error a
+raise :: String -> ExceptT Error (State Table) a
 raise = throwError
 
-table :: Either Error State -> Either Error Table
+table :: ExceptT Error (State Table) MyState -> ExceptT Error (State Table) Table
 table = fmap fst
 
-sexp :: Either Error State -> Either Error Sexp
+sexp :: ExceptT Error (State Table) MyState -> ExceptT Error (State Table) Sexp
 sexp = fmap snd
 
 map' :: Monad m => (Sexp -> m Sexp) -> Sexp -> m Sexp
 map' f (x := y) = (:=) <$> f x <*> map' f y
 map' f x = f x
 
--- change to
--- eval :: State -> Either Error Sexp
-eval :: State -> Either Error Sexp
+eval :: MyState -> ExceptT Error (State Table) Sexp
 eval (t, e) = case e of
   FuncL f := x -> sexp $ f (t, x)
   AtomL a -> do
@@ -32,14 +31,14 @@ eval (t, e) = case e of
     eval (t, x' := ys)
   x -> return x
 
-getBind :: State -> Either Error Sexp
+getBind :: MyState -> ExceptT Error (State Table) Sexp
 getBind = \case
   ([], _) -> raise "Error: exhasted bindings"
   ((n, f) : ts, AtomL s)
-    | n == s -> Right f
+    | n == s -> return f
     | otherwise -> getBind (ts, AtomL s)
 
-evalList :: State -> Either Error Sexp
+evalList :: MyState -> ExceptT Error (State Table) Sexp
 evalList (t, xs) = do
   xs' <- map' (\x -> eval (t, x)) xs
   return xs'
@@ -48,7 +47,7 @@ evalList (t, xs) = do
 -- Arithmetic --
 
 -- sums a list of IntLs
-plusL :: State -> Either Error State
+plusL :: MyState -> ExceptT Error (State Table) MyState
 plusL (t, xs) = do
   xs' <- evalList (t, xs)
   case xs' of
@@ -60,7 +59,7 @@ plusL (t, xs) = do
     z -> raise $ "Type Error: '+' takes Ints,'n  " ++ show z ++ " do not have type Int"
 
 -- subtracts two IntLs
-minusL :: State -> Either Error State
+minusL :: MyState -> ExceptT Error (State Table) MyState
 minusL (t, xs) = do
   xs' <- evalList (t, xs)
   case xs' of
@@ -68,7 +67,7 @@ minusL (t, xs) = do
     z -> raise $ "Type Error: '-' takes two Ints, \n  " ++ show z ++ " do not have type Int"
 
 -- multiplies two IntLs
-multiplyL :: State -> Either Error State
+multiplyL :: MyState -> ExceptT Error (State Table) MyState
 multiplyL (t, xs) = do
   xs' <- evalList (t, xs)
   case xs' of
@@ -80,7 +79,7 @@ multiplyL (t, xs) = do
     z -> raise $ "Type Error: '*' takes IntLs,\n  "++ show z ++ " do not have type Int"
 
 -- divides two IntLs
-divideL :: State -> Either Error State
+divideL :: MyState -> ExceptT Error (State Table) MyState
 divideL (t, xs) = do
   xs' <- evalList (t, xs)
   case xs' of
@@ -89,7 +88,7 @@ divideL (t, xs) = do
     z -> raise $ "Type Error: '/' takes two IntLs,\n  " ++ show z ++ " do not have type Int"
 
 -- negates one IntL
-negativeL :: State -> Either Error State
+negativeL :: MyState -> ExceptT Error (State Table) MyState
 negativeL (t, xs) = do
   xs' <- eval (t, xs)
   case xs' of
@@ -109,12 +108,11 @@ arithmetics =
 -- Let --
 
 -- defines a let expression
-letL :: State -> Either Error State
+letL :: MyState -> ExceptT Error (State Table) MyState
 letL = \case
-  (t, AtomL n :=  x := e := NilL) -> return (t', e')
-    where
-    t' = (n, x) : t
-    Right e' = eval (t', e)
+  (t, AtomL n :=  x := e := NilL) -> do
+    e' <- eval (t, e)
+    return ((n, x) : t, e')
   _ -> raise "Syntax Error: Invalid let expression"
 
 extend :: Sexp -> Sexp -> Table -> Maybe Table
@@ -124,13 +122,14 @@ extend xs NilL _ = Nothing
 extend (AtomL x := xs) (v := vs) t = ((x, v) :) <$> extend xs vs t
 
 -- defines a lambda expression
-lambdaL :: State -> Either Error State
+lambdaL :: MyState -> ExceptT Error (State Table) MyState
 lambdaL = \case
   (t, xs := ds := NilL) -> do
     fn' <- eval (t, FuncL fn)
     return (t, fn')
       where
-      fn (t', es) = let Right vs = evalList (t', es) in
+      fn (t', es) = do
+        vs <- evalList (t', es)
         case extend xs vs t of
           Just t -> do
             ds' <- eval (t, ds)
@@ -139,13 +138,14 @@ lambdaL = \case
   _ -> raise "Syntax Error: invalid lambda expression"
 
 -- defines a recursive lambda expression
-fixL :: State -> Either Error State
+fixL :: MyState -> ExceptT Error (State Table) MyState
 fixL = \case
   (t, AtomL f := xs := d := NilL) -> do
     fn' <- eval (t, FuncL fn)
     return (t, fn')
     where
-    fn (t', es) = let Right vs = evalList (t', es) in
+    fn (t', es) = do
+      vs <- evalList (t', es)
       case extend xs vs ((f, FuncL fn) : t) of
         Just t -> do
           d' <- eval (t, d)
@@ -163,15 +163,15 @@ lets =
 
 -- Bool --
 
-equalsL :: State -> Either Error State
+equalsL :: MyState -> ExceptT Error (State Table) MyState
 equalsL (t, x) = case x of
   _ := NilL -> raise "Type Error: '=' takes two arguments"
-  a := b := NilL -> return (t, BoolL $ a' == b')
-    where
-    a' = eval (t, a)
-    b' = eval (t, b)
+  a := b := NilL -> do
+  a' <- eval (t, a)
+  b' <- eval (t, b)
+  return (t, BoolL $ a' == b')
 
-andL :: State -> Either Error State
+andL :: MyState -> ExceptT Error (State Table) MyState
 andL (t, x) = do
   x' <- eval (t, x)
   case stripNilL x' of
@@ -179,7 +179,7 @@ andL (t, x) = do
     BoolL _ := BoolL _ -> return (t, BoolL False)
     _ -> raise "Type Error: 'and' takes two Bools"
 
-orL :: State -> Either Error State
+orL :: MyState -> ExceptT Error (State Table) MyState
 orL (t, x) = do
   x' <- eval (t, x)
   case stripNilL x' of
@@ -188,7 +188,7 @@ orL (t, x) = do
     BoolL False := BoolL False -> return (t, BoolL False)
     _ -> raise "Type Error: 'or' takes two Bools"
 
-xorL :: State -> Either Error State
+xorL :: MyState -> ExceptT Error (State Table) MyState
 xorL (t, x) = do
   x' <- eval (t, x)
   case stripNilL x' of
@@ -197,7 +197,7 @@ xorL (t, x) = do
     BoolL _ := BoolL _ -> return (t, BoolL False)
     _ -> raise "Type Error: 'xor' takes two Bools"
 
-notL :: State -> Either Error State
+notL :: MyState -> ExceptT Error (State Table) MyState
 notL (t, x) = do
   x' <- eval (t, x)
   case stripNilL x' of
@@ -205,7 +205,7 @@ notL (t, x) = do
     BoolL False -> return (t, BoolL True)
     _ -> raise "Type Error: 'not' takes one Bool"
 
-ifL :: State -> Either Error State
+ifL :: MyState -> ExceptT Error (State Table) MyState
 ifL (t, p := d := e := NilL) = do
   p' <- eval (t, p)
   case stripNilL p' of
@@ -242,7 +242,10 @@ stripNilL = \case
   x := y -> stripNilL x := stripNilL y
   x -> x
 
-runEval :: Sexp -> Either Error Sexp
-runEval x = do
-  x' <- eval (builtins, x)
-  return $ stripNilL x'
+runEval :: Sexp -> Table -> Either Error Sexp
+runEval x = evalState $ runExceptT $ run x
+  where
+  run :: Sexp -> ExceptT Error (State Table) Sexp
+  run x = do
+    x' <- eval (builtins, x)
+    return $ stripNilL x'

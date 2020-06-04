@@ -7,9 +7,14 @@ module Parser where
 
 import Data.Char
 import Control.Applicative
-import Control.Monad
-import Control.Monad.Reader
+--import Control.Monad
+--import Control.Monad.Reader
+import Control.Monad.Except
+import Control.Monad.State
 
+
+raise :: String -> Either Error a
+raise = throwError
 
 newtype Parser a = MakeParser (String -> Maybe (a, String))
   deriving Functor
@@ -39,15 +44,16 @@ data Sexp
   = AtomL String
   | IntL Integer
   | BoolL Bool
-  | FuncL (State -> Either Error State)
+--  | FuncL (MyState -> Either Error MyState)
+  | FuncL (MyState -> ExceptT Error (State Table) MyState)
   | Sexp := Sexp
   | NilL
-  | ErrorL String
+--  | ErrorL String
 
 infixr 5 :=
 
 type Table = [(String, Sexp)]
-type State = (Table, Sexp)
+type MyState = (Table, Sexp)
 
 type Error = String
 
@@ -71,10 +77,9 @@ instance Show Sexp where
     FuncL _ -> "<F>"
     (x := y) -> "(" ++ show x ++ " := " ++ show y ++ ")"
     NilL -> "NilL"
-    ErrorL s -> "ErrorL " ++ s
+--    ErrorL s -> "ErrorL " ++ s
 
-instance Eq (State -> Either Error State) where _ == _ = False
-
+instance Eq (MyState -> ExceptT Error (State Table) MyState) where _ == _ = False
 deriving instance Eq Sexp
 
 runParser :: Parser a -> String -> Maybe (a, String)
@@ -181,8 +186,8 @@ sexpP = consP <|> intP <|> atomP
 -- deals with potential parse failure
 unwrap :: Maybe Sexp -> Either Error Sexp
 unwrap = \case
-  Nothing -> Left "Parse Failure"
-  Just x -> Right x
+  Nothing -> raise "Parse Failure"
+  Just x -> return x
 
 parse :: String -> Either Error Sexp
 parse = unwrap . finishedP . runParser sexpP

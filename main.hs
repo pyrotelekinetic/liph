@@ -1,13 +1,17 @@
 import Parser (parse)
 import Eval (runEval)
+import Control.Monad.Except
 
+main :: IO ()
 main = do
---  putStr "$ "
-  input <- getLine
-  putStrLn $ "$ " ++ input
-  case parse input of
+--  putStrLn "$ "
+  i <- getLine
+  putStrLn $ "$ " ++ i
+  case parse i of
     Left e -> putStrLn e
-    Right input' -> do
-      putStrLn $ "parsed as: " ++ show input'
-      putStrLn $ "> " ++ show (runEval input')
+    Right i' -> do
+      putStrLn $ "parsed as: " ++ show i'
+      case runEval i' [] of
+        Left e -> putStrLn e
+        Right i'' -> putStrLn $ "> " ++ show i''
   main
