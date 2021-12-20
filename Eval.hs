@@ -8,6 +8,8 @@ import Control.Monad.Except
 import Control.Monad.State
 import Parser (Sexp (..), Table, MyState, Error)
 
+import Debug.Trace
+
 
 raise :: String -> ExceptT Error (State Table) a
 raise = throwError
@@ -25,6 +27,7 @@ map' f x = f x
 eval :: MyState -> ExceptT Error (State Table) Sexp
 eval (t, e) = case e of
 	FuncL f := x -> sexp $ f (t, x)
+	MacroL f := x -> sexp $ f (t, x)
 	AtomL a -> do
 		a' <- getBind (t, AtomL a)
 		eval (t, a')
@@ -233,9 +236,29 @@ bools =
 	, ("if", FuncL ifL)
 	]
 
+letMacroL :: MyState -> ExceptT Error (State Table) MyState
+--letMacroL = \case
+--	(t, AtomL n := x := e := NilL) -> do
+--		return ((n, x) : t, e)
+--	_ -> raise "Syntax Error: Invalid let-macro expression"
+letMacroL (t, NilL) = raise "NilL"
+letMacroL (t, (a := b := NilL)) = raise "length 2"
+letMacroL (t, (a := b := c := NilL)) = raise "length 3"
+--letMacroL state@(t, AtomL n := x := e := NilL) = trace (show state) $ do
+--	return ((n, x) : t, e)
+letMacroL (_, s) = trace (show $ sexpLength s) raise "Syntax Error: Invalid let-macro expression"
+
+sexpLength :: Sexp -> Int
+sexpLength NilL = 0
+sexpLength (a := b) = 1 + sexpLength b
+sexpLength _ = 1
+
+macros :: Table
+macros = [("let-macro", MacroL letMacroL)]
+
 
 builtins :: Table
-builtins = arithmetics ++ bools ++ lets
+builtins = arithmetics ++ bools ++ lets ++ macros
 
 stripNilL :: Sexp -> Sexp
 stripNilL = \case

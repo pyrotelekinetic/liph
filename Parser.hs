@@ -48,6 +48,7 @@ data Sexp
 	| BoolL Bool
 --	| FuncL (MyState -> Either Error MyState)
 	| FuncL (MyState -> ExceptT Error (State Table) MyState)
+	| MacroL (MyState -> ExceptT Error (State Table) MyState)
 	| Sexp := Sexp
 	| NilL
 --	| ErrorL String
@@ -77,11 +78,13 @@ instance Show Sexp where
 		IntL x -> "IntL " ++ show x
 		BoolL x -> "BoolL " ++ show x
 		FuncL _ -> "<F>"
+		MacroL _ -> "<M>"
 		(x := y) -> "(" ++ show x ++ " := " ++ show y ++ ")"
 		NilL -> "NilL"
 --		ErrorL s -> "ErrorL " ++ s
 
 instance Eq (MyState -> ExceptT Error (State Table) MyState) where _ == _ = False
+instance Eq (Sexp -> ExceptT Error (State Table) MyState) where _ == _ = False
 deriving instance Eq Sexp
 
 runParser :: Parser a -> String -> Maybe (a, String)
