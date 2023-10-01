@@ -1,0 +1,15 @@
+# Always color output
+- arguments: [ --color ]
+
+# Enable extra lint groups
+- group: { name: future, enabled: true }
+- group: { name: generalise-for-conciseness, enabled: true }
+- group: { name: dollar, enabled: true }
+
+# Require an export list for all modules other than Main
+- warn: { name: Use module export list }
+- ignore: { name: Use module export list, within: [ Main ] }
+
+# Enable more lints
+- warn: { name: Redundant bracket due to operator fixities }
+- error: { name: Redundant do }
