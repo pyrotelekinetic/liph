@@ -27,6 +27,11 @@ executable liph
     build-depends:
         , base
         , mtl
+    default-extensions:
+        , LambdaCase
+        , DeriveFunctor
+        , FlexibleInstances
+        , StandaloneDeriving
     ghc-options:
         -Wall
         -Wno-unused-do-bind

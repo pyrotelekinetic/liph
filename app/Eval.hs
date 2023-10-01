@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Eval where
 
 import Control.Monad.Except
