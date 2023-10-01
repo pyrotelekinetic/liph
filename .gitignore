@@ -1,2 +1,5 @@
 # cabal artifacts
 dist-newstyle/
+
+# nix artifacts
+result
