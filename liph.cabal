@@ -1,0 +1,34 @@
+cabal-version:      3.0
+
+name:               liph
+version:            0.0.0
+synopsis:           A lisp dialect written in haskell
+
+license:            AGPL-3.0-or-later
+license-file:       LICENSE
+
+author:             Carter "pyrotelekinetic" Ison
+maintainer:         carter@isons.org
+copyright:          (C) 2023  Carter "pyrotelekinetic" Ison <carter@isons.org>
+
+build-type:         Simple
+
+extra-doc-files:    README.md
+
+
+executable liph
+    hs-source-dirs:   app
+    main-is:          Main.hs
+
+    other-modules:
+        Eval
+        Parser
+
+    build-depends:
+        , base
+        , mtl
+    ghc-options:
+        -Wall
+        -Wno-unused-do-bind
+
+    default-language: GHC2021
