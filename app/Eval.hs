@@ -170,9 +170,9 @@ equalsL :: MyState -> ExceptT Error (State Table) MyState
 equalsL (t, x) = case x of
   _ := NilL -> raise "Type Error: '=' takes two arguments"
   a := b := NilL -> do
-  a' <- eval (t, a)
-  b' <- eval (t, b)
-  return (t, BoolL $ a' == b')
+    a' <- eval (t, a)
+    b' <- eval (t, b)
+    return (t, BoolL $ a' == b')
 
 andL :: MyState -> ExceptT Error (State Table) MyState
 andL (t, x) = do
