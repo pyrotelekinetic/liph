@@ -1,4 +1,10 @@
-module Parser where
+module Parser
+  ( Sexp (..)
+  , Table
+  , MyState
+  , Error
+  , parse
+  ) where
 
 import Data.Char
 import Control.Applicative
@@ -15,22 +21,20 @@ newtype Parser a = MakeParser (String -> Maybe (a, String))
   deriving Functor
 
 instance Monad Parser where
-  return x = MakeParser $ \ s -> Just (x, s)
-  p >>= f = MakeParser $ \ s ->
+  p >>= f = MakeParser $ \s ->
     case runParser p s of
       Just (x, s') -> runParser (f x) s'
       Nothing -> Nothing
 
 instance Applicative Parser where
-  pure = return
+  pure x = MakeParser $ \ s -> Just (x, s)
   mf <*> mx = do
     f <- mf
-    x <- mx
-    return $ f x
+    f <$> mx
 
 instance Alternative Parser where
-  empty = MakeParser $ \ s -> Nothing
-  p <|> q = MakeParser $ \ s ->
+  empty = MakeParser $ const Nothing
+  p <|> q = MakeParser $ \s ->
     case runParser p s of
       Nothing -> runParser q s
       Just x -> Just x
@@ -86,16 +90,6 @@ runParser (MakeParser f) = f
 
 
 
--- always fails
-failP :: Parser a
-failP = MakeParser $ \s -> Nothing
-
--- always passes, consuming 1 character
-passP :: Parser Char
-passP = MakeParser $ \case
-  c : cs -> Just (c, cs)
-  _ -> Nothing
-
 -- consumes a character that passes a predicate, p
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy p = MakeParser $ \case
@@ -117,42 +111,21 @@ wordP = do
   some (satisfy $ flip elem chars) where
     chars = ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ ['+', '-', '*', '/', '=', '#']
 
--- parses a string in which all characters meet a predicate
-wordP' :: (Char -> Bool) -> Parser String
-wordP' p = do
-  some $ satisfy p
-
--- parses any alphabetic string
-lettersP :: Parser String
-lettersP = some $ satisfy isAlpha
-
--- parses a given string
-stringP :: String -> Parser String
-stringP = \case
-  [] -> return []
-  x : xs -> do
-    c <- charP x
-    cs <- stringP xs
-    return $ c : cs
-
 -- parses an (AtomL s)
 atomP :: Parser Sexp
-atomP = do
-  s <- wordP
-  return (AtomL s)
+atomP = AtomL <$> wordP
 
 -- parses an integer
 numP :: Parser Integer
 numP = do
   ns <- some $ satisfy isDigit
-  return $ read ns
+  pure $ read ns
 
 -- parses an (IntL i)
 intP :: Parser Sexp
 intP = do
   spaceP
-  i <- numP
-  return $ IntL i
+  IntL <$> numP
 
 -- parses a parenthesized string
 parensP :: Parser a -> Parser a
@@ -163,13 +136,13 @@ parensP p = do
   result <- p
   spaceP
   charP ')'
-  return result
+  pure result
 
 -- parses a cons expression
 consP :: Parser Sexp
 consP = do
   cells <- parensP $ many sexpP
-  return $ foldr (:=) NilL cells
+  pure $ foldr (:=) NilL cells
 
 -- confirms complete parse
 finishedP :: Maybe (a, String) -> Maybe a
@@ -185,7 +158,7 @@ sexpP = consP <|> intP <|> atomP
 unwrap :: Maybe Sexp -> Either Error Sexp
 unwrap = \case
   Nothing -> raise "Parse Failure"
-  Just x -> return x
+  Just x -> pure x
 
 parse :: String -> Either Error Sexp
 parse = unwrap . finishedP . runParser sexpP

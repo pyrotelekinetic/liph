@@ -1,6 +1,5 @@
 import Parser (parse)
 import Eval (runEval)
-import Control.Monad.Except
 
 main :: IO ()
 main = do

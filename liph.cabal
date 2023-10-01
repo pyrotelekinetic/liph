@@ -35,5 +35,7 @@ executable liph
     ghc-options:
         -Wall
         -Wno-unused-do-bind
+        -Wno-name-shadowing
+        -Wno-incomplete-patterns
 
     default-language: GHC2021
